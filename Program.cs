@@ -2,8 +2,7 @@
 using Microsoft.Identity.Client;
 using Microsoft.Identity.Client.Extensions.Msal;
 using Microsoft.Extensions.Configuration;
-
-
+using System.CommandLine;
 
 public class Program
 {
@@ -11,14 +10,75 @@ public class Program
     static string[] scopes = { "User.Read", "Files.ReadWrite" };
     static string sockFile = "/tmp/ds3-savebackup.sock";
 
-    static IConfiguration config = new ConfigurationBuilder()
-            .AddJsonFile("appsettings.json")
-            .AddEnvironmentVariables()
-            .Build();
-
-
     private static async Task Main(string[] args)
     {
+        
+
+        var rootCommand = new RootCommand("OneDrive plugin for DS3SaveBackup");
+        var configFileOption = new Option<DS3SaveBackupOptions?>(
+            name: "--config",
+            description: "The config file. Default to appsettings.json",
+            isDefault: true,
+            parseArgument: result => {
+                string? filePath = result.Tokens.Single().Value;
+                if (!System.IO.File.Exists(filePath))
+                {
+                    result.ErrorMessage = "Config file does not exist";
+                    return null;
+                }
+                else
+                {
+                    IConfiguration config = new ConfigurationBuilder()
+                                                .AddJsonFile(filePath)
+                                                .AddEnvironmentVariables()
+                                                .Build();
+
+                    return new DS3SaveBackupOptions
+                    {
+                        WorkingDirectory = config["WorkdingDirectory"],
+                        ClientId = config["ClientId"],
+                        CloudFolder = config["CloudFolder"],
+                        LocalFolderOrFile = config["LocalFolderOrFile"],
+                        Scopes = config["Scopes"],
+
+                    };
+                }
+            });
+        configFileOption.SetDefaultValue("appsettings.json");
+        rootCommand.AddGlobalOption(configFileOption);
+        rootCommand.SetHandler((configFileValue)=>{
+            if(System.IO.File.Exists(configFileValue))
+            {
+                config = new ConfigurationBuilder()
+                .AddJsonFile(configFileValue)
+                .AddEnvironmentVariables()
+                .Build();
+            }
+            else
+            {
+
+            }
+        }, configFileOption);
+
+        
+        var uploadCommand = new System.CommandLine.Command("upload", "Upload file to cloud.");
+        var downloadCommand = new Command("download", "Download file from cloud.");
+        var loginCommand = new Command("login", "Login via device code flow.");
+        
+        uploadCommand.SetHandler(()=>{
+
+        });
+
+            
+        rootCommand.AddCommand(uploadCommand);
+        rootCommand.AddCommand(downloadCommand);
+        rootCommand.AddCommand(loginCommand);
+
+        
+
+        
+
+
         
         var app = PublicClientApplicationBuilder.Create(clientId)
             .WithRedirectUri("http://localhost")
